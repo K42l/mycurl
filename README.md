@@ -20,4 +20,4 @@ cargo run -- -h
 # NOTE:
 As this is my first time doing my own requets without a library on any language, I used as a starting point this [tutorial](https://dev.to/chaudharypraveen98/build-your-own-curl-rust-5cj6) on how to build your own curl in rust.<br/>
 Of course i didn't just copied the code, because than i would learn nothing, and I made some changes and added some features so i could learn more than just the tutorial provides.<br/>
-But, because a I used it as a starting point, I think it's only fair to give the due credit.
+But, because I used it as a starting point, I think it's only fair to give the due credit.
