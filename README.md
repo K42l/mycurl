@@ -5,7 +5,7 @@ A simple CLI tool that acts like a curl
 # Disclaimer
 
 I'm doing this project as educational pourpose only, so i can learn rust and understand better how web requests are made.<br/>
-I want to make this CLI a little closer to the real curl command, as it is now, it doesn't even has a location option to follow redirects when you get a 301 status.
+I want to make this CLI a little closer to the real curl command, as it is now, it doesn't even has a location option to follow redirects when you get a 301 status.<br/>
 I'm still working on it on my free time, and will be updating my progress.
 # Usage
 
