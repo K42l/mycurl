@@ -43,7 +43,7 @@ pub fn get_arguments() -> ArgMatches{
         )
         .arg(
             Arg::new("verbose")
-                .help("Verbose Mode - Default is true")
+                .help("Verbose Mode")
                 .long("verbose")
                 .short('v')
                 .action(clap::ArgAction::SetTrue)
