@@ -12,8 +12,7 @@ I'm still working on it on my free time, and will be updating my progress.
 ```
 cargo run -- "https://www.yoururl.com/fictional-url"
 ```
-As I'm using clap, wonderful crate by the way, you can use -h to get all the options.<br/>
-You can get the options with:
+As I'm using clap, wonderful crate by the way, you can use -h to get all the options:
 ```
 cargo run -- -h
 ```
