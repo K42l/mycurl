@@ -5,8 +5,10 @@ A simple CLI tool that acts like a curl
 # Disclaimer
 
 I'm doing this project for educational pourpose only, so i can learn rust and understand better how web requests are made.<br/>
-I want to make this CLI a little closer to the real curl command, as it is now, it doesn't even has a location option to follow redirects and it doesn`t support https requests.<br/>
+
 I'm still working on it on my free time, and will be updating it.
+
+I started using rustls and it works fine, but since it doesn't support some legacy protocols, I'll probably change it to opnessl or maybe use both.
 # Usage
 You'll need cargo to build and compile<br />
 ```
