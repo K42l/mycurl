@@ -1,8 +1,12 @@
 mod cli;
 mod util;
 use std::io::{self, BufWriter, Read, Write};
-use std::net::TcpStream;
+use std::net::{TcpStream, ToSocketAddrs};
 use std::fs::File;
+use std::path::PathBuf;
+use std::sync::Arc;
+use rustls::{client, ClientConfig, ProtocolVersion, RootCertStore};
+use webpki_roots;
 
 use cli::get_arguments;
 use util::{parse_url, populate_request};
@@ -15,60 +19,164 @@ fn main() -> Result<(), std::io::Error>{
     let data = matches.get_one::<String>("data");
     let method = matches.get_one::<String>("method");
     let headers:Vec<&str> = matches.get_many::<String>("header")
-                                            .unwrap_or_default()
-                                            .map(|s| s.as_str())
-                                            .collect();
+                                .unwrap_or_default()
+                                .map(|s| s.as_str())
+                                .collect();
     let output = matches.get_one::<std::path::PathBuf>("file");
     let include = matches.get_flag("include");
 
+    let handle = BufWriter::new(match &output{
+        Some(ref path) => Box::new(File::create(path).unwrap()) as Box<dyn Write>,
+        None => Box::new(io::stdout()) as Box<dyn Write>
+    });
+
     let (protocol, hostname, pathname, socket_addr) = parse_url(url);
+    let socket_test = socket_addr.to_socket_addrs();
 
-    let buffer_str = populate_request(protocol, hostname, &pathname, data, method, headers);
+    match socket_test{
+        Ok(socket) => {
+            if socket.as_ref().len() > 0{
+                for s in socket {
+                    println!("Connecting: {}", &socket_addr);
+                    let request = populate_request(protocol, &hostname.clone(), &pathname, data, method, headers.clone());
+                    let buffer: Result<Vec<u8>, std::io::Error>;
+                    if socket_addr.contains("443"){
+                        buffer = tls_connection(&s.to_string(), hostname.clone(), &request, verbose);      
+                    } else {
+                        buffer = http_connection(&s.to_string(), &request, verbose);
+                    }
+                    match buffer{
+                        Ok(buffer) => {
+                            if buffer.is_empty(){
+                                continue;
+                            }else {
+                                match write_response(verbose, include, &buffer, &output, handle){
+                                    Ok(response) => response,
+                                    Err(err) => return Err(err),
+                                };
+                                break;
+                            }
+                           
+                        }
+                        Err(err) => return Err(err)
+                    }
+                    
+                }
+                return Ok(())
+            }
+            else {
+                println!("No address found");
+                Ok(())
+            }            
+        }
+        Err(err) => return Err(err)
+    }
+}
 
-    let tcp_socket = TcpStream::connect(socket_addr);
-    match tcp_socket {
-        Ok(mut stream) =>{
+fn tls_connection(
+    socket_addr: &str, 
+    hostname: String, 
+    request: &str,  
+    verbose: bool
+) -> Result<Vec<u8>, std::io::Error>{
+    //let root_store = rustls::RootCertStore::empty();
+    let root_store = rustls::RootCertStore::from_iter(
+        webpki_roots::TLS_SERVER_ROOTS
+            .iter()
+            .cloned(),
+    );
+    let config = rustls::ClientConfig::builder()
+                                .with_root_certificates(root_store)
+                                .with_no_client_auth();
+
+    let rc_config = Arc::new(config);
+    let client_connection = rustls::ClientConnection::new(rc_config, hostname.try_into().unwrap());
+    match client_connection{
+        Ok (mut client) => {
             if verbose {
-                let lines = buffer_str.lines();
+                let lines = request.lines();
+                println!("Request Headers:");
+                for line in lines {
+                    println!("> {line}");
+                }
+            }             
+            let mut sock = TcpStream::connect(socket_addr).unwrap();
+            let mut tls = rustls::Stream::new(&mut client, &mut sock);
+
+            tls.write_all(request.as_bytes()).unwrap();
+            
+            
+            let ciphersuite = tls.conn
+                                .negotiated_cipher_suite()
+                                .unwrap();
+            if verbose {
+                println!("Current ciphersuite: {:?}",ciphersuite.suite())
+            }
+
+            let mut buffer = Vec::new();
+
+            tls.read_to_end(&mut buffer).unwrap();
+
+            Ok(buffer)
+        }
+        Err(err) =>{
+            let std_err = std::io::Error::new(io::ErrorKind::Other, err.to_string());
+            return Err(std_err)
+        } 
+    }
+
+}
+
+fn http_connection( 
+    socket_addr: &str, 
+    request: &str, 
+    verbose: bool
+) -> Result<Vec<u8>, std::io::Error>{
+    let tcp_socket = TcpStream::connect(&socket_addr);
+    match tcp_socket {
+        Ok(mut stream) =>{            
+            if verbose {
+                let lines = request.lines();
                 println!("Request Headers:");
                 for line in lines {
                     println!("> {line}");
                 }
             }
-
-            stream
-                .write_all(buffer_str.as_bytes())
+            stream.write_all(request.as_bytes())
                 .expect("Faile to write to stream");
 
             let mut buffer = Vec::new();
-            stream
-                .read_to_end(&mut buffer)
+            stream.read_to_end(&mut buffer)
                 .expect("Failed to read response from host");
 
-            let resp = String::from_utf8_lossy(&buffer);
-            let (resp_header, resp_data) = (&resp).split_once("\r\n\r\n").unwrap();
-
-            let mut handle = BufWriter::new(match &output{
-                Some(ref path) => Box::new(File::create(path).unwrap()) as Box<dyn Write>,
-                None => Box::new(io::stdout()) as Box<dyn Write>
-            });
-
-            if verbose || include{
-                let lines = resp_header.split("\r\n");
-                for line in lines{
-                    if verbose && output.is_some() {
-                        println!("< {line}")
-                    }
-                    if include {
-                        writeln!(handle, "< {line}")?;
-                    }
-                }
-            }
-            writeln!(handle, "{resp_data}")?;
-            Ok(())
+            Ok(buffer)
         }
-        Err(err) =>{
-            return Err(err)
+        Err(err) => return Err(err)
+    }
+}
+
+fn write_response(
+    verbose: bool, 
+    include: bool, 
+    buffer: &[u8], 
+    output: &Option<&PathBuf>, 
+    mut handle: BufWriter<Box<dyn Write>>
+) -> Result<(), std::io::Error>{
+    let resp = String::from_utf8_lossy(&buffer);
+    let (resp_header, resp_data) = (&resp).split_once("\r\n\r\n").unwrap();
+
+    if verbose || include{
+        let lines = resp_header.split("\r\n");
+        println!("Response Headers:");
+        for line in lines{
+            if verbose && output.is_none() {
+                println!("< {line}")
+            }
+            if include {
+                writeln!(handle, "< {line}")?;
+            }
         }
     }
+    writeln!(handle, "{resp_data}")?;
+    Ok(())
 }

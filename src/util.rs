@@ -11,19 +11,20 @@ lazy_static!{
 }
 
 const DEFAULT_PORT: &str = "80";
+const DEFAULT_PORT_S: &str = "443";
 
-pub fn parse_url(url: &str) -> (&str, &str, &str, String){
+pub fn parse_url(url: &str) -> (&str, String, &str, String){
     let (protocol, rest) = url.split_once("://").unwrap_or(("https",url));
     let (temp_hostname, pathname) = rest.split_once("/").unwrap_or((rest, ""));
     let (hostname, port) = if temp_hostname.contains(":"){
         temp_hostname.split_once(":").expect("Invalid hostname")
     } else {
-        (temp_hostname, DEFAULT_PORT)
+        (temp_hostname, if protocol == "https"{DEFAULT_PORT_S} else {DEFAULT_PORT})
     };
     let socket_addr = format!("{hostname}:{port}");
     let protocol_str = PROTOCOL_STRING.get(protocol).expect("invalid protocol");
 
-    (protocol_str, hostname, pathname, socket_addr)
+    (protocol_str, hostname.to_string(), pathname, socket_addr)
 }
 
 pub fn populate_request(
