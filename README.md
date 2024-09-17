@@ -8,7 +8,7 @@ I'm doing this project for educational pourpose only, so i can learn rust and un
 
 I'm still working on it on my free time, and will be updating it.
 
-~~I started using rustls and it works fine, but since it doesn't support some legacy protocols, I'll probably change it to opnessl or maybe use both.~~
+~~I started using rustls and it works fine, but since it doesn't support some legacy protocols, I'll probably change it to opnessl or maybe use both.~~<br/>
 Added openssl and left the tls function and crates.
 # Usage
 You'll need cargo to build and compile<br />
