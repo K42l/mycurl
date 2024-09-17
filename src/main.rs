@@ -5,6 +5,7 @@ use std::net::{TcpStream, ToSocketAddrs};
 use std::fs::File;
 use std::path::PathBuf;
 use std::sync::Arc;
+use openssl::ssl::{SslConnector, SslMethod};
 use rustls::{client, ClientConfig, ProtocolVersion, RootCertStore};
 use webpki_roots;
 
@@ -41,7 +42,7 @@ fn main() -> Result<(), std::io::Error>{
                     let request = populate_request(protocol, &hostname.clone(), &pathname, data, method, headers.clone());
                     let buffer: Result<Vec<u8>, std::io::Error>;
                     if socket_addr.contains("443"){
-                        buffer = tls_connection(&s.to_string(), hostname.clone(), &request, verbose);      
+                        buffer = openssl_connection(&s.to_string(), hostname.clone(), &request, verbose);      
                     } else {
                         buffer = http_connection(&s.to_string(), &request, verbose);
                     }
@@ -123,6 +124,42 @@ fn tls_connection(
             let std_err = std::io::Error::new(io::ErrorKind::Other, err.to_string());
             return Err(std_err)
         } 
+    }
+
+}
+
+fn openssl_connection(
+    socket_addr: &str, 
+    hostname: String, 
+    request: &str,  
+    verbose: bool
+) -> Result<Vec<u8>, std::io::Error>{
+    let connector = SslConnector::builder(SslMethod::tls()).unwrap().build();
+
+    let stream = TcpStream::connect(socket_addr).unwrap();
+    let stream = connector.connect(&hostname, stream);
+
+    match stream{
+        Ok(mut ssl_stream) => {
+            if verbose {
+                let lines = request.lines();
+                println!("Request Headers:");
+                for line in lines {
+                    println!("> {line}");
+                }
+            }  
+
+            ssl_stream.write_all(request.as_bytes()).unwrap();
+            let mut buffer = Vec::new();
+
+            ssl_stream.read_to_end(&mut buffer).unwrap();
+            
+            Ok(buffer)
+        }
+        Err(err) =>{
+            let std_err = std::io::Error::new(io::ErrorKind::Other, err.to_string());
+            return Err(std_err)
+        }
     }
 
 }
