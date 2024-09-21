@@ -1,13 +1,16 @@
 mod cli;
 mod util;
+use core::str;
 use std::io::{self, BufWriter, Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::fs::File;
+use std::ops::Index;
 use std::path::PathBuf;
 use std::sync::Arc;
 use openssl::ssl::{SslConnector, SslMethod};
 use rustls::{client, ClientConfig, ProtocolVersion, RootCertStore};
 use webpki_roots;
+use httparse::Response;
 
 use cli::get_arguments;
 use util::{parse_url, populate_request};
@@ -25,11 +28,7 @@ fn main() -> Result<(), std::io::Error>{
                                 .collect();
     let output = matches.get_one::<std::path::PathBuf>("file");
     let include = matches.get_flag("include");
-
-    let handle = BufWriter::new(match &output{
-        Some(ref path) => Box::new(File::create(path).unwrap()) as Box<dyn Write>,
-        None => Box::new(io::stdout()) as Box<dyn Write>
-    });
+    let location = matches.get_flag("location");
 
     let (protocol, hostname, pathname, socket_addr) = parse_url(url);
     let socket_test = socket_addr.to_socket_addrs();
@@ -51,10 +50,46 @@ fn main() -> Result<(), std::io::Error>{
                             if buffer.is_empty(){
                                 continue;
                             }else {
-                                match write_response(verbose, include, &buffer, &output, handle){
-                                    Ok(response) => response,
-                                    Err(err) => return Err(err),
-                                };
+                                if location {
+                                    let mut response_headers = [httparse::EMPTY_HEADER; 64];
+                                    let mut response = Response::new(&mut response_headers);
+                                    let _ = httparse::Response::parse(& mut response, &buffer).unwrap();
+                                    match response.code.unwrap() {
+                                        301 | 302 => {
+                                            for header in response.headers.into_iter() {
+                                                if header.name == "Location"{
+                                                    let new_path = str::from_utf8(header.value).unwrap();
+                                                    let request2 = populate_request(protocol, &hostname.clone(), new_path, data, method, headers.clone());
+                                                    let buffer2: Result<Vec<u8>, std::io::Error>;
+                                                    if socket_addr.contains("443"){
+                                                        buffer2 = openssl_connection(&s.to_string(), hostname.clone(), &request2, verbose);      
+                                                    } else {
+                                                        buffer2 = http_connection(&s.to_string(), &request2, verbose);
+                                                    }
+                                                    match buffer2 {
+                                                        Ok(buffer) => {
+                                                            match write_response(verbose, include, &buffer, &output){
+                                                                Ok(response) => response,
+                                                                Err(err) => return Err(err),
+                                                            }
+                                                        }
+                                                        Err(err) => return Err(err)
+                                                    }
+                                                }                   
+                                            }
+                                        }
+                                        _ => match write_response(verbose, include, &buffer, &output){
+                                            Ok(response) => response,
+                                            Err(err) => return Err(err),
+                                        }
+                                    }
+                                }  else {
+                                    match write_response(verbose, include, &buffer, &output){
+                                        Ok(response) => response,
+                                        Err(err) => return Err(err),
+                                    };
+                                }                           
+                                
                                 break;
                             }
                            
@@ -74,6 +109,7 @@ fn main() -> Result<(), std::io::Error>{
     }
 }
 
+/*
 fn tls_connection(
     socket_addr: &str, 
     hostname: String, 
@@ -125,8 +161,8 @@ fn tls_connection(
             return Err(std_err)
         } 
     }
-
 }
+*/
 
 fn openssl_connection(
     socket_addr: &str, 
@@ -196,17 +232,21 @@ fn write_response(
     verbose: bool, 
     include: bool, 
     buffer: &[u8], 
-    output: &Option<&PathBuf>, 
-    mut handle: BufWriter<Box<dyn Write>>
+    output: &Option<&PathBuf>
 ) -> Result<(), std::io::Error>{
     let resp = String::from_utf8_lossy(&buffer);
     let (resp_header, resp_data) = (&resp).split_once("\r\n\r\n").unwrap();
+
+    let mut handle = BufWriter::new(match &output{
+        Some(ref path) => Box::new(File::create(path).unwrap()) as Box<dyn Write>,
+        None => Box::new(io::stdout()) as Box<dyn Write>
+    });
 
     if verbose || include{
         let lines = resp_header.split("\r\n");
         println!("Response Headers:");
         for line in lines{
-            if verbose && output.is_none() {
+            if verbose {
                 println!("< {line}")
             }
             if include {

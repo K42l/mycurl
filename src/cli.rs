@@ -48,5 +48,12 @@ pub fn get_arguments() -> ArgMatches{
                 .short('v')
                 .action(clap::ArgAction::SetTrue)
         )
+        .arg(
+            Arg::new("location")
+                .help("Follow the location on the header of the response")
+                .long("location")
+                .short('L')
+                .action(clap::ArgAction::SetTrue)
+        )
         .get_matches()
 }

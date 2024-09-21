@@ -280,6 +280,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "httparse"
+version = "1.9.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0fcc0b4a115bf80b728eb8ea024ad5bd707b615bfed49e0665b6e0f86fd082d9"
+
+[[package]]
 name = "is_terminal_polyfill"
 version = "1.70.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -367,6 +373,7 @@ version = "0.1.0"
 dependencies = [
  "aws-lc-sys 0.20.1",
  "clap",
+ "httparse",
  "lazy_static",
  "openssl",
  "rustls",
