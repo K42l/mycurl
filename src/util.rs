@@ -38,11 +38,19 @@ pub fn populate_request(
     let method = method.unwrap();
     let mut req = String::new();
 
-    if path.chars().next().unwrap() == '/'{
-        req += &format!("{method} {path} {protocol}\r\n");
-    } else {
-        req += &format!("{method} /{path} {protocol}\r\n");
+    match path.chars().next() {
+        Some(path_char) => {
+            if path_char == '/'{
+                req += &format!("{method} {path} {protocol}\r\n");
+            } else {
+                req += &format!("{method} /{path} {protocol}\r\n");
+            }
+        }
+        None => {
+            req += &format!("{method} /{path} {protocol}\r\n");
+        }
     }
+
     req += &format!("Host: {host}\r\n");
     req += "Connection: close\r\n";
     req += "User-Agent: mcurl/0.1.0\r\n";
