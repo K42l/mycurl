@@ -32,16 +32,15 @@ fn main() -> Result<(), std::io::Error>{
     let request = populate_request(protocol, &hostname.clone(), &pathname, data, method, headers.clone());
     
     let buffer_result = handle_connection(  &request, 
-                                                                    &hostname, 
-                                                                    socket_addr, 
-                                                                    verbose, 
-                                                                    location, 
-                                                                    protocol, 
-                                                                    pathname, 
-                                                                    data, 
-                                                                    method, 
-                                                                    &headers
-                                                                );
+                                            &hostname, 
+                                            socket_addr, 
+                                            verbose, 
+                                            location, 
+                                            protocol, 
+                                            pathname, 
+                                            data, 
+                                            method, 
+                                            &headers);
 
     match buffer_result {
         Ok(buffer) => {
